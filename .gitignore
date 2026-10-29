@@ -18,3 +18,5 @@ first-test/
 处理日志.txt
 .summary-venv/
 .rollback/
+.whisper-mlx-venv/
+classroom-audio-*/

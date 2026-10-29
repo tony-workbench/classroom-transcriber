@@ -1,0 +1,11 @@
+# Transcription speed experiments
+
+These experiments were performed on the development M5 Mac using the same local Whisper large-v3-turbo model and detected speech segments. They are **not enabled in the app**. The recording and transcripts are private and are not part of this repository.
+
+- A one-hour recording contained 118 detected speech segments. The existing sequential GPU transcription stage took roughly 4 minutes 29 seconds; an experimental batch-of-four decoder took about 2 minutes 22 seconds. The earlier sequential run overlapped a separate CPU task, so these timings are not a controlled speed comparison. Speech detection, alignment and summarization are excluded.
+- The first 30 minutes of the batch output had roughly 97–99% normalized word-sequence similarity to the existing GPU output. Later, harder-to-hear segments differed substantially and the batch output contained more words. Similarity is not transcription accuracy, and neither output has a human reference. More words do not establish that more speech was correctly recognized.
+- A more conservative batch variant retried 36 of 118 segments and took about 3 minutes 20 seconds, but major differences in difficult segments remained. Confidence thresholds did not identify every disagreement.
+- An alternative GPU attention calculation took 3.68 seconds versus 4.67 seconds on one clean one-minute segment, with the same normalized words and boundaries under the same random seed. On a separate 12-segment sample containing difficult sections, it took 72.11 versus 68.28 seconds and 7 segments differed despite the same seed. These are small, single-run observations, not a general benchmark.
+- A clean two-voice synthetic clip with a known 83-word script produced zero word errors in the existing pipeline and one substitution in a manually split batch experiment. With added synthetic noise, both tested versions had one word error. These tests do not establish real-world accuracy.
+
+The candidate implementations were not adopted: the measured quality evidence and stability are insufficient to select them for the app. A human reference and repeated tests on representative clear, noisy, quiet and overlapping speech would be needed before reconsidering. For shorter wait times, the app offers transcription-only mode, which skips summarization, alignment and diarization.
