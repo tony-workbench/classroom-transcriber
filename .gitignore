@@ -16,3 +16,5 @@ first-test/
 页面录音/
 *.srt
 处理日志.txt
+.summary-venv/
+.rollback/

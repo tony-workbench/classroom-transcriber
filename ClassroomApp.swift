@@ -2,9 +2,9 @@ import Cocoa
 import UniformTypeIdentifiers
 
 let fm = FileManager.default
-let root = Bundle.main.bundleURL.deletingLastPathComponent()
+let root = Bundle.main.bundleURL.resolvingSymlinksInPath().deletingLastPathComponent()
 let python = root.appendingPathComponent(".venv/bin/python")
-let script = root.appendingPathComponent("transcribe.py")
+let script = root.appendingPathComponent("pipeline.py")
 
 func outputDirectory(_ file: URL) throws -> URL {
     let base = file.deletingLastPathComponent().appendingPathComponent("Transcribe", isDirectory: true)
@@ -21,7 +21,7 @@ final class Controller: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var status = NSTextField(wrappingLabelWithString: "准备就绪")
     var selectButton = NSButton(title: "选择录音文件", target: nil, action: nil)
     var folderButton = NSButton(title: "选择录音文件夹", target: nil, action: nil)
-    var start = NSButton(title: "开始转写", target: nil, action: nil)
+    var start = NSButton(title: "开始转写和总结", target: nil, action: nil)
     var show = NSButton(title: "打开结果文件夹", target: nil, action: nil)
     var progress = NSProgressIndicator()
     var file: URL?
@@ -33,7 +33,7 @@ final class Controller: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.title = "课堂录音转写"; window.center(); window.delegate = self
         let title = NSTextField(labelWithString: "课堂录音转写")
         title.font = .systemFont(ofSize: 25, weight: .semibold)
-        let subtitle = NSTextField(wrappingLabelWithString: "选择英文录音，转写结果会保存在录音所在文件夹的 Transcribe 子文件夹中。")
+        let subtitle = NSTextField(wrappingLabelWithString: "选择英文录音，应用会转写并生成课堂总结，结果保存在录音所在文件夹的 Transcribe 子文件夹中。")
         subtitle.textColor = .secondaryLabelColor
         fileLabel.lineBreakMode = .byTruncatingMiddle
         status.textColor = .secondaryLabelColor
@@ -69,7 +69,7 @@ final class Controller: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard let audio=file else { return }
         do {
             let dest=try outputDirectory(audio); result=dest
-            let task=Process(); task.executableURL=python; task.arguments=["-u",script.path,audio.path,"--output-dir",dest.path]
+            let task=Process(); task.executableURL=python; task.arguments=["-u",script.path,audio.path,dest.path]
             let pipe=Pipe(); task.standardOutput=pipe; task.standardError=pipe
             let logURL=dest.appendingPathComponent("处理日志.txt")
             fm.createFile(atPath:logURL.path, contents:nil)
@@ -82,6 +82,7 @@ final class Controller: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 if text.contains("Transcribing on CPU") { message="正在转写英文录音。长录音可能需要较长时间…" }
                 else if text.contains("Aligning words") { message="正在对齐文字和时间…" }
                 else if text.contains("Detecting speakers") { message="正在区分说话人…" }
+                else if text.contains("Starting local summary") || text.contains("Summarizing part") || text.contains("Combining notes") { message="正在本地生成课堂总结，长录音可能需要较长时间…" }
                 else { message=nil }
                 if let message=message { DispatchQueue.main.async { self?.status.stringValue=message } }
             }
@@ -89,8 +90,8 @@ final class Controller: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 guard let self=self else { return }
                 self.process=nil; self.progress.stopAnimation(nil); self.selectButton.isEnabled=true; self.folderButton.isEnabled=true; self.start.isEnabled=true
                 if p.terminationStatus == 0 {
-                    self.status.stringValue="转写完成！点击“打开结果文件夹”查看 TXT、SRT 和 Markdown。"; self.show.isEnabled=true
-                } else { self.status.stringValue="转写失败（代码 \(p.terminationStatus)）。请检查录音是否可以播放，或联系 Codex 查看。"; self.show.isEnabled=true }
+                    self.status.stringValue="转写和课堂总结完成！点击“打开结果文件夹”查看。"; self.show.isEnabled=true
+                } else if p.terminationStatus == 2 { self.status.stringValue="转写已完成，但总结失败。原始转写已保留，请打开结果文件夹查看日志。"; self.show.isEnabled=true } else { self.status.stringValue="转写失败（代码 \(p.terminationStatus)）。请打开结果文件夹查看日志。"; self.show.isEnabled=true }
             }}
             try task.run(); process=task; selectButton.isEnabled=false; folderButton.isEnabled=false; start.isEnabled=false; show.isEnabled=false; progress.startAnimation(nil); status.stringValue="正在读取录音…"
         } catch { status.stringValue="无法开始：\(error.localizedDescription)" }
@@ -109,6 +110,6 @@ final class Controller: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
 if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--self-test" {
     let audio=URL(fileURLWithPath:CommandLine.arguments[2]); let dest=try outputDirectory(audio)
-    let p=Process(); p.executableURL=python; p.arguments=["-u",script.path,audio.path,"--output-dir",dest.path]; try p.run(); p.waitUntilExit(); print("RESULT_DIR=\(dest.path)"); exit(p.terminationStatus)
+    let p=Process(); p.executableURL=python; p.arguments=["-u",script.path,audio.path,dest.path]; try p.run(); p.waitUntilExit(); print("RESULT_DIR=\(dest.path)"); exit(p.terminationStatus)
 }
 let app=NSApplication.shared; let delegate=Controller(); app.delegate=delegate; app.setActivationPolicy(.regular); app.run()
